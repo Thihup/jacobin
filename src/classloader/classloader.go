@@ -290,6 +290,65 @@ func LoadFromLoaderChannel(LoaderChannel <-chan string) {
 }
 
 // Load a class from name in java/lang/Class format
+func LoadClassFromNameOnlyToClassLoader(classloader *Classloader, className string) error {
+	var err error
+
+	if className == "" {
+		errMsg := "LoadClassFromNameOnly(): null class name is invalid"
+		_ = log.Log(errMsg, log.SEVERE)
+		debug.PrintStack()
+		return errors.New(errMsg)
+	}
+
+	// get the jmod file name for this class. We'll use the jmod file to
+	// get the .class file for this class.
+	jmodFileName := JmodMapFetch(className)
+
+	if strings.HasSuffix(className, ";") {
+		msg := fmt.Sprintf("LoadClassFromNameOnly: invalid class name: %s", className)
+		_ = log.Log(msg, log.SEVERE)
+		debug.PrintStack()
+		return errors.New(msg)
+	}
+
+	// Load class from a jmod?
+	if jmodFileName != "" {
+		_ = log.Log("LoadClassFromNameOnly: Load "+className+" from jmod "+jmodFileName, log.CLASS)
+		classBytes, err := GetClassBytes(jmodFileName, className)
+		if err != nil {
+			_ = log.Log("LoadClassFromNameOnly: GetClassBytes className="+className+" from jmodFileName="+jmodFileName+" failed", log.SEVERE)
+			_ = log.Log(err.Error(), log.SEVERE)
+		}
+		_, err = loadClassFromBytes(*classloader, className, classBytes)
+		return err
+	}
+
+	// Load class from a jar file?
+	if len(globals.GetGlobalRef().StartingJar) > 0 {
+		validName := util.ConvertToPlatformPathSeparators(className)
+		_ = log.Log("LoadClassFromNameOnly: LoadClassFromJar "+validName, log.CLASS)
+		_, err = LoadClassFromJar(*classloader, validName, globals.GetGlobalRef().StartingJar)
+		if err != nil {
+			_ = log.Log("LoadClassFromNameOnly: LoadClassFromJar "+validName+" failed", log.SEVERE)
+			_ = log.Log(err.Error(), log.SEVERE)
+		}
+		return err
+	}
+
+	// Loading from a local file system class
+	// TODO: classpath
+	validName := util.ConvertToPlatformPathSeparators(className)
+	_ = log.Log("LoadClassFromNameOnly: Loaded class from file "+validName, log.CLASS)
+	_, err = LoadClassFromFile(*classloader, validName)
+	if err != nil {
+		errMsg := fmt.Sprintf("LoadClassFromNameOnly for %s failed", className)
+		globals.GetGlobalRef().FuncThrowException(excNames.ClassNotFoundException, errMsg)
+		return errors.New(errMsg) // return for tests only
+	}
+	return err
+}
+
+// Load a class from name in java/lang/Class format
 func LoadClassFromNameOnly(className string) error {
 	var err error
 
@@ -451,7 +510,12 @@ func ParseAndPostClass(cl *Classloader, filename string, rawBytes []byte) (uint3
 		Loader: cl.Name,
 		Data:   &classToPost,
 	}
+
 	MethAreaInsert(fullyParsedClass.className, &eKF)
+
+	if VerifyClass(&eKF, cl) != nil {
+		return types.InvalidStringIndex, fmt.Errorf("class did not verify")
+	}
 
 	// record the class in the classloader
 	ClassesLock.Lock()

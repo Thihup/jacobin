@@ -8,9 +8,7 @@ package classloader
 
 import (
 	"archive/zip"
-	"bytes"
 	"io"
-	"jacobin/globals"
 	"jacobin/log"
 	"strings"
 )
@@ -19,60 +17,60 @@ import (
 // Only called in one place: LoadBaseClasses.
 func WalkBaseJmod() error {
 
-	// Skip over the JMOD header so that it is recognized as a ZIP file
-	global := globals.GetGlobalRef()
-	ioReader := bytes.NewReader(global.JmodBaseBytes[4:])
-	zipReader, err := zip.NewReader(ioReader, int64(len(global.JmodBaseBytes)-4))
-	if err != nil {
-		_ = log.Log(err.Error(), log.WARNING)
-		return err
-	}
-
-	// Get the lib/classlist (bootstrap set of classes) if it exists
-	bootstrapSet := getClasslist(*zipReader)
-	useBootstrapSet := len(bootstrapSet) > 0
-
-	// For each class file in the base jmod,
-	// if it is in the classlist
-	for _, classFile := range zipReader.File {
-
-		// If not prefixed by "classes" or suffixed by ".class", skip this file
-		if !strings.HasPrefix(classFile.Name, "classes") {
-			continue
-		}
-		if !strings.HasSuffix(classFile.Name, ".class") {
-			continue
-		}
-
-		// Remove prefix for bootstrap list check
-		strapFileName := strings.Replace(classFile.Name, "classes/", "", 1)
-
-		// Is there a bootstrap list?
-		if useBootstrapSet {
-			// Yes, make sure that this class is on the list
-			_, onList := bootstrapSet[strapFileName]
-			if !onList {
-				continue
-			}
-		}
-
-		// Open the class file
-		rc, err := classFile.Open()
-		if err != nil {
-			return err
-		}
-
-		// Read all of the bytes
-		classBytes, err := io.ReadAll(rc)
-		if err != nil {
-			return err
-		}
-		_ = rc.Close()
-
-		// Parse and post class into MethArea
-		ParseAndPostClass(&BootstrapCL, classFile.Name, classBytes)
-
-	}
+	//// Skip over the JMOD header so that it is recognized as a ZIP file
+	//global := globals.GetGlobalRef()
+	//ioReader := bytes.NewReader(global.JmodBaseBytes[4:])
+	//zipReader, err := zip.NewReader(ioReader, int64(len(global.JmodBaseBytes)-4))
+	//if err != nil {
+	//	_ = log.Log(err.Error(), log.WARNING)
+	//	return err
+	//}
+	//
+	//// Get the lib/classlist (bootstrap set of classes) if it exists
+	//bootstrapSet := getClasslist(*zipReader)
+	//useBootstrapSet := len(bootstrapSet) > 0
+	//
+	//// For each class file in the base jmod,
+	//// if it is in the classlist
+	//for _, classFile := range zipReader.File {
+	//
+	//	// If not prefixed by "classes" or suffixed by ".class", skip this file
+	//	if !strings.HasPrefix(classFile.Name, "classes") {
+	//		continue
+	//	}
+	//	if !strings.HasSuffix(classFile.Name, ".class") {
+	//		continue
+	//	}
+	//
+	//	// Remove prefix for bootstrap list check
+	//	strapFileName := strings.Replace(classFile.Name, "classes/", "", 1)
+	//
+	//	// Is there a bootstrap list?
+	//	if useBootstrapSet {
+	//		// Yes, make sure that this class is on the list
+	//		_, onList := bootstrapSet[strapFileName]
+	//		if !onList {
+	//			continue
+	//		}
+	//	}
+	//
+	//	// Open the class file
+	//	rc, err := classFile.Open()
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	// Read all of the bytes
+	//	classBytes, err := io.ReadAll(rc)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	_ = rc.Close()
+	//
+	//	// Parse and post class into MethArea
+	//	//ParseAndPostClass(&BootstrapCL, classFile.Name, classBytes)
+	//
+	//}
 
 	return nil
 }
